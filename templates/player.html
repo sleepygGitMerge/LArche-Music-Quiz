@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Playing Quiz</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <style>
+        body { padding-top: 20px; text-align: center; }
+        .media-container { margin: 20px auto; max-width: 100%; height: auto; border-radius: 8px; }
+        .media-container img, .media-container video { max-height: 300px; border-radius: 8px; }
+        .audio-player { margin: 20px auto; width: 100%; max-width: 400px; }
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        button.correct { background-color: #28a745 !important; border-color: #28a745 !important; color: white; }
+        button.wrong { background-color: #dc3545 !important; border-color: #dc3545 !important; color: white; }
+        #next-btn { display: none; margin-top: 20px; width: 100%; }
+        .summary-item { text-align: left; background: var(--card-background-color); padding: 15px; margin-bottom: 10px; border-radius: 5px;}
+
+        /* This hides the YouTube iframe entirely so only sound plays */
+        #yt-container { position: absolute; width: 0; height: 0; overflow: hidden; top: -9999px; left: -9999px; }
+    </style>
+</head>
+<body>
+    <div id="yt-container"></div>
+
+    <main class="container">
+        <nav>
+            <ul><li><a href="/" role="button" class="outline">Opuść Quiz</a></li></ul>
+            <ul><li><strong>Pytanie <span id="q-num">1</span>/10</strong></li></ul>
+        </nav>
+
+        <div id="quiz-container">
+            <h2 id="question-text">Ładowanie...</h2>
+            <div id="media-area"></div>
+            <div id="audio-area"></div>
+
+            <div class="options-grid" id="options-area"></div>
+
+            <button id="next-btn" class="secondary" onclick="nextQuestion()">Następne pytanie ➔</button>
+        </div>
+
+        <div id="results-container" style="display: none;">
+            <h2>🎉 Quiz Ukończony! 🎉</h2>
+            <h3>Twój wynik: <span id="final-score"></span></h3>
+            <div id="summary-area"></div>
+            <br>
+            <a href="/" role="button">Powrót na stronę główną</a>
+        </div>
+    </main>
+
+    <script>
+        const quizId = {{ quiz_id }};
+        let questions = [];
+        let currentIndex = 0;
+        let score = 0;
+        let userAnswers = [];
+        let ytPlayer = null; // Holds the YouTube player instance
+
+        fetch(`/api/quiz/${quizId}/questions`)
+            .then(res => res.json())
+            .then(data => {
+                questions = data;
+                if(questions.length === 0) {
+                    document.getElementById('quiz-container').innerHTML = "<h3>This quiz has no questions yet!</h3>";
+                } else {
+                    renderQuestion();
+                }
+            });
+
+        function playYoutubeAudio(videoId, startSeconds) {
+            // Destroy previous player to stop old music
+            if (ytPlayer) {
+                ytPlayer.destroy();
+            }
+            // Create a fresh div for the API to replace with an iframe
+            document.getElementById('yt-container').innerHTML = '<div id="hidden-yt-player"></div>';
+
+            ytPlayer = new YT.Player('hidden-yt-player', {
+                height: '0',
+                width: '0',
+                videoId: videoId,
+                playerVars: {
+                    'autoplay': 1,
+                    'controls': 0,
+                    'start': startSeconds,
+                    'playsinline': 1
+                },
+                events: {
+                    'onReady': (event) => {
+                        event.target.playVideo();
+                    }
+                }
+            });
+        }
+
+        function renderQuestion() {
+            const q = questions[currentIndex];
+            document.getElementById('q-num').innerText = currentIndex + 1;
+            document.getElementById('question-text').innerText = q.question_text;
+
+            // Handle Visual Media
+            const mediaArea = document.getElementById('media-area');
+            mediaArea.innerHTML = '';
+            if (q.media_type === 'image' && q.media_path) {
+                mediaArea.innerHTML = `<img src="/${q.media_path}" class="media-container" alt="Quiz Image">`;
+            } else if (q.media_type === 'video' && q.media_path) {
+                mediaArea.innerHTML = `<video src="/${q.media_path}" controls autoplay class="media-container"></video>`;
+            }
+
+            // Handle Audio (Local OR YouTube)
+            const audioArea = document.getElementById('audio-area');
+            audioArea.innerHTML = '';
+
+            if (ytPlayer) {
+                ytPlayer.destroy(); // Always stop YT audio between questions
+                ytPlayer = null;
+            }
+
+            if (q.youtube_id) {
+                playYoutubeAudio(q.youtube_id, q.youtube_start);
+            } else if (q.audio_path) {
+                audioArea.innerHTML = `<audio src="/${q.audio_path}" controls autoplay class="audio-player"></audio>`;
+            }
+
+            // Handle Options
+            const optionsArea = document.getElementById('options-area');
+            optionsArea.innerHTML = '';
+            const opts = [
+                { letter: 'A', text: q.opt_a }, { letter: 'B', text: q.opt_b },
+                { letter: 'C', text: q.opt_c }, { letter: 'D', text: q.opt_d }
+            ];
+
+            opts.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.innerText = opt.text;
+                btn.id = `btn-${opt.letter}`;
+                btn.onclick = () => checkAnswer(opt.letter, opt.text, q.correct_opt);
+                optionsArea.appendChild(btn);
+            });
+
+            document.getElementById('next-btn').style.display = 'none';
+        }
+
+        function checkAnswer(selectedLetter, selectedText, correctLetter) {
+            ['A', 'B', 'C', 'D'].forEach(letter => {
+                document.getElementById(`btn-${letter}`).disabled = true;
+            });
+
+            const q = questions[currentIndex];
+            let correctText = "";
+            if (correctLetter === 'A') correctText = q.opt_a;
+            if (correctLetter === 'B') correctText = q.opt_b;
+            if (correctLetter === 'C') correctText = q.opt_c;
+            if (correctLetter === 'D') correctText = q.opt_d;
+
+            const isCorrect = selectedLetter === correctLetter;
+
+            if (isCorrect) {
+                document.getElementById(`btn-${selectedLetter}`).classList.add('correct');
+                score++;
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            } else {
+                document.getElementById(`btn-${selectedLetter}`).classList.add('wrong');
+                document.getElementById(`btn-${correctLetter}`).classList.add('correct');
+            }
+
+            userAnswers.push({
+                question: q.question_text,
+                userGuess: selectedText,
+                correctAnswer: correctText,
+                isCorrect: isCorrect
+            });
+
+            // Optional: Stop the music when the user guesses
+            // if (ytPlayer) ytPlayer.pauseVideo();
+
+            document.getElementById('next-btn').style.display = 'block';
+        }
+
+        function nextQuestion() {
+            currentIndex++;
+            if (currentIndex < questions.length) {
+                renderQuestion();
+            } else {
+                if (ytPlayer) ytPlayer.destroy(); // Ensure music stops at results
+                showResults();
+            }
+        }
+
+        function showResults() {
+            document.getElementById('quiz-container').style.display = 'none';
+            document.getElementById('results-container').style.display = 'block';
+            document.getElementById('final-score').innerText = `${score} / ${questions.length}`;
+
+            const summaryArea = document.getElementById('summary-area');
+            userAnswers.forEach((ans, i) => {
+                const icon = ans.isCorrect ? '✅' : '❌';
+                summaryArea.innerHTML += `
+                    <div class="summary-item">
+                        <strong>${i + 1}. ${ans.question}</strong><br>
+                        Your answer: ${icon} ${ans.userGuess} <br>
+                        ${!ans.isCorrect ? `Correct answer: <b>${ans.correctAnswer}</b>` : ''}
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>

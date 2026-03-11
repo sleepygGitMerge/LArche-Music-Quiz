@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Quiz App</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        body { padding-top: 50px; text-align: center; }
+        .quiz-btn { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>🎵 Muzyczny Quiz L'Arche 🎵</h1>
+        <p>Witaj! Wybierz Quiz w który chcesz zagrać lub stwórz swój własny</p>
+
+        <div class="grid">
+            <div>
+                <h3>Dostępne Quizy</h3>
+                <div id="quiz-list">
+                    <p>Loading quizzes...</p>
+                </div>
+            </div>
+            <div>
+                <h3>Admin</h3>
+                <a href="/creator" role="button" class="outline">🛠️ Kreator Quizów</a>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Fetch quizzes from the backend and display them as buttons
+        fetch('/api/quizzes')
+            .then(response => response.json())
+            .then(quizzes => {
+                const list = document.getElementById('quiz-list');
+                list.innerHTML = '';
+                if (quizzes.length === 0) {
+                    list.innerHTML = '<p>No quizzes yet. Go create one!</p>';
+                    return;
+                }
+                quizzes.forEach(quiz => {
+                    const btn = document.createElement('a');
+                    btn.href = `/play/${quiz.id}`;
+                    btn.className = 'button quiz-btn block';
+                    btn.style.display = 'block';
+                    btn.innerText = `▶ Play: ${quiz.name}`;
+                    list.appendChild(btn);
+                });
+            });
+    </script>
+</body>
+</html>

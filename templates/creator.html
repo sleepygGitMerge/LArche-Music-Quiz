@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz Creator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        body { padding-top: 30px; }
+        .card { padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; background: var(--card-background-color); }
+        .yt-box { background: rgba(255,0,0,0.05); padding: 15px; border-radius: 5px; border-left: 4px solid red; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <nav>
+            <ul><li><strong>🛠️ Kreator Quizów</strong></li></ul>
+            <ul><li><a href="/" role="button" class="outline">Powrót na stronę główną</a></li></ul>
+        </nav>
+
+        <div class="card">
+            <h3>1. Stwórz nowy quiz</h3>
+            <form id="create-quiz-form">
+                <input type="text" id="quiz-name" placeholder="E.g., 80s Rock Hits" required>
+                <button type="submit">Utwórz quiz</button>
+            </form>
+            <p id="quiz-msg" style="color: green;"></p>
+        </div>
+
+        <div class="card">
+            <h3>2. Dodaj pytania do quizu</h3>
+            <form id="add-question-form">
+                <label>Wybierz Quiz:
+                    <select name="quiz_id" id="quiz-select" required></select>
+                </label>
+
+                <label>Treść Pytania:
+                    <input type="text" name="question_text" placeholder="E.g., Nazwij tę piostenkę!" required>
+                </label>
+
+                <div class="grid">
+                    <label>Dodatkowe media:
+                        <select name="media_type" id="media-type" required>
+                            <option value="none">Nic (tylko tekst)</option>
+                            <option value="image">Obrazek</option>
+                            <option value="video">Filmik</option>
+                        </select>
+                    </label>
+                    <label>Wgraj media (Optional):
+                        <input type="file" name="media_file" accept="image/*,video/*">
+                    </label>
+                </div>
+
+                <label>Wgraj ścieżkę dźwiękową (Optional):
+                    <input type="file" name="audio_file" accept="audio/*">
+                </label>
+
+                <div class="yt-box">
+                    <label><strong>Lub dodaj audio z YouTube (Optional):</strong>
+                        <div class="grid">
+                            <input type="url" name="youtube_url" placeholder="Tutaj wklej link do filmiku (e.g. https://youtu.be/...)">
+                            <input type="number" name="youtube_start" placeholder="Czas rozpoczęcia (w sekundach)" min="0" value="0">
+                        </div>
+                        <small><em>Nagranie będzie ukryte, tylko dźwięk będzie grać.</em></small>
+                    </label>
+                </div>
+
+                <hr>
+                <h4>Odpowiedzi</h4>
+                <div class="grid">
+                    <label><input type="radio" name="correct_opt" value="A" required> A jest poprawne
+                        <input type="text" name="opt_a" placeholder="Opcja A" required>
+                    </label>
+                    <label><input type="radio" name="correct_opt" value="B"> B jest poprawne
+                        <input type="text" name="opt_b" placeholder="Opcja B" required>
+                    </label>
+                </div>
+                <div class="grid">
+                    <label><input type="radio" name="correct_opt" value="C"> C jest poprawne
+                        <input type="text" name="opt_c" placeholder="Opcja C" required>
+                    </label>
+                    <label><input type="radio" name="correct_opt" value="D"> D jest poprawne
+                        <input type="text" name="opt_d" placeholder="Opcja D" required>
+                    </label>
+                </div>
+
+                <button type="submit">Dodaj Pytanie</button>
+                <p id="question-msg" style="color: green;"></p>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        function loadQuizzes() {
+            fetch('/api/quizzes')
+                .then(res => res.json())
+                .then(quizzes => {
+                    const select = document.getElementById('quiz-select');
+                    select.innerHTML = '';
+                    quizzes.forEach(q => {
+                        select.innerHTML += `<option value="${q.id}">${q.name}</option>`;
+                    });
+                });
+        }
+        loadQuizzes();
+
+        document.getElementById('create-quiz-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('name', document.getElementById('quiz-name').value);
+
+            fetch('/api/quizzes', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('quiz-msg').innerText = "Quiz created successfully!";
+                    document.getElementById('quiz-name').value = '';
+                    loadQuizzes();
+                });
+        });
+
+        document.getElementById('add-question-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+
+            fetch('/api/questions', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('question-msg').innerText = "Question added successfully!";
+                    this.reset();
+                    setTimeout(() => document.getElementById('question-msg').innerText = "", 3000);
+                });
+        });
+    </script>
+</body>
+</html>
