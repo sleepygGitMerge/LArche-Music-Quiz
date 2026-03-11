@@ -4,6 +4,10 @@ import random
 import re
 from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
+import urllib.request
+import urllib.error
+import urllib.parse  # <-- NEW: Needed to safely encode the URL
+
 
 app = Flask(__name__)
 
@@ -45,6 +49,24 @@ init_db()
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+def is_youtube_embeddable(youtube_url):
+    try:
+        # Safely encode the URL so special characters don't break the request
+        encoded_url = urllib.parse.quote(youtube_url, safe='')
+        oembed_url = f"https://www.youtube.com/oembed?url={encoded_url}&format=json"
+
+        # Pretend to be a normal web browser (YouTube sometimes ignores Python bots)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        req = urllib.request.Request(oembed_url, headers=headers)
+
+        urllib.request.urlopen(req)
+        return True  # It succeeded, video is embeddable
+
+    except urllib.error.HTTPError as e:
+        return False  # Throws 401 Unauthorized if embedding is disabled
+    except Exception:
+        return False
 
 # --- WEB ROUTES ---
 @app.route('/')
@@ -100,8 +122,6 @@ def add_question():
         audio_path = f"{UPLOAD_FOLDER}/{filename}"
 
     data = request.form
-
-    # Extract YouTube ID from URL using Regex
     youtube_url = data.get('youtube_url', '')
     youtube_start = data.get('youtube_start', 0)
     if not youtube_start:
@@ -109,6 +129,11 @@ def add_question():
 
     youtube_id = ""
     if youtube_url:
+        # NEW: Check if YouTube allows embedding BEFORE saving!
+        if not is_youtube_embeddable(youtube_url):
+            return jsonify({'status': 'error',
+                            'message': 'The creator of this YouTube video has disabled embedding. Please use a different link (like a fan-made lyric video).'}), 400
+
         match = re.search(r'(?:v=|\/|youtu\.be\/|embed\/)([0-9A-Za-z_-]{11})', youtube_url)
         if match:
             youtube_id = match.group(1)
@@ -125,7 +150,6 @@ def add_question():
     conn.commit()
     conn.close()
     return jsonify({'status': 'success'})
-
 
 @app.route('/api/quiz/<int:quiz_id>/questions')
 def get_quiz_questions(quiz_id):

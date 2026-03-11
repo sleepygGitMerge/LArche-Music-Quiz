@@ -4,13 +4,18 @@
     <meta charset="UTF-8">
     <title>Quiz Creator</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { padding-top: 30px; }
         .card { padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; background: var(--card-background-color); }
         .yt-box { background: rgba(255,0,0,0.05); padding: 15px; border-radius: 5px; border-left: 4px solid red; margin-bottom: 15px; }
+        /* Hide the test player */
+        #yt-test-container { position: absolute; width: 0; height: 0; overflow: hidden; top: -9999px; left: -9999px; }
     </style>
 </head>
 <body>
+    <div id="yt-test-container"></div>
+
     <main class="container">
         <nav>
             <ul><li><strong>🛠️ Kreator Quizów</strong></li></ul>
@@ -27,7 +32,7 @@
         </div>
 
         <div class="card">
-            <h3>2. Dodaj pytania do quizu</h3>
+             <h3>2. Dodaj pytania do quizu</h3>
             <form id="add-question-form">
                 <label>Wybierz Quiz:
                     <select name="quiz_id" id="quiz-select" required></select>
@@ -37,30 +42,32 @@
                     <input type="text" name="question_text" placeholder="E.g., Nazwij tę piostenkę!" required>
                 </label>
 
+
                 <div class="grid">
-                    <label>Dodatkowe media:
+                     <label>Dodatkowe media:
                         <select name="media_type" id="media-type" required>
                             <option value="none">Nic (tylko tekst)</option>
                             <option value="image">Obrazek</option>
                             <option value="video">Filmik</option>
                         </select>
                     </label>
-                    <label>Wgraj media (Optional):
+                    <label>Wgraj media (Opcjonalne):
                         <input type="file" name="media_file" accept="image/*,video/*">
                     </label>
                 </div>
 
-                <label>Wgraj ścieżkę dźwiękową (Optional):
+                <label>Wgraj ścieżkę dźwiękową (Opcjonalne):
                     <input type="file" name="audio_file" accept="audio/*">
                 </label>
 
                 <div class="yt-box">
-                    <label><strong>Lub dodaj audio z YouTube (Optional):</strong>
+                    <label><strong>Lub dodaj audio z YouTube (Opcjonalne):</strong>
                         <div class="grid">
-                            <input type="url" name="youtube_url" placeholder="Tutaj wklej link do filmiku (e.g. https://youtu.be/...)">
-                            <input type="number" name="youtube_start" placeholder="Czas rozpoczęcia (w sekundach)" min="0" value="0">
+                            <input type="url" name="youtube_url" id="yt-url" placeholder="Tutaj wklej link do filmiku (e.g. https://youtu.be/...)">
+                            <input type="number" name="youtube_start" id="yt-start" placeholder="Czas rozpoczęcia (w sekundach)" min="0" value="0">
                         </div>
-                        <small><em>Nagranie będzie ukryte, tylko dźwięk będzie grać.</em></small>
+                        <button type="button" id="test-yt-btn" class="secondary outline" style="width: auto; margin-top: 10px;">▶️ Sprawdź audio</button>
+                        <br><small><em>Przed dodaniem pytania sprawdź dźwięk, aby upewnić się, że YouTube nie zablokuje go ze względu na prawa autorskie.</em></small>
                     </label>
                 </div>
 
@@ -90,6 +97,7 @@
     </main>
 
     <script>
+        // --- QUIZ LOADING & SUBMISSION LOGIC ---
         function loadQuizzes() {
             fetch('/api/quizzes')
                 .then(res => res.json())
@@ -120,14 +128,91 @@
         document.getElementById('add-question-form').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
+            const msgBox = document.getElementById('question-msg');
+            msgBox.innerText = "Checking media and saving...";
+            msgBox.style.color = "orange";
 
             fetch('/api/questions', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('question-msg').innerText = "Question added successfully!";
-                    this.reset();
-                    setTimeout(() => document.getElementById('question-msg').innerText = "", 3000);
+                .then(res => res.json().then(data => ({status: res.status, body: data})))
+                .then(resObj => {
+                    if (resObj.status !== 200) {
+                        msgBox.style.color = "red";
+                        msgBox.innerText = "⚠️ " + resObj.body.message;
+                    } else {
+                        msgBox.style.color = "green";
+                        msgBox.innerText = "✅ Question added successfully!";
+                        this.reset();
+                        // Stop the test player if it's running
+                        if (testPlayer) { testPlayer.destroy(); testPlayer = null; isPlayingTest = false; document.getElementById('test-yt-btn').innerText = "▶️ Test Audio"; }
+                        setTimeout(() => msgBox.innerText = "", 4000);
+                    }
+                })
+                .catch(err => {
+                    msgBox.style.color = "red";
+                    msgBox.innerText = "⚠️ An unexpected error occurred.";
                 });
+        });
+
+        // --- YOUTUBE TEST BUTTON LOGIC ---
+        let testPlayer = null;
+        let isPlayingTest = false;
+
+        // Helper to extract YouTube ID from URL
+        function getYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        document.getElementById('test-yt-btn').addEventListener('click', function() {
+            const url = document.getElementById('yt-url').value;
+            const startSecs = document.getElementById('yt-start').value || 0;
+            const btn = this;
+
+            // If it's already playing, stop it
+            if (isPlayingTest) {
+                if (testPlayer) testPlayer.destroy();
+                testPlayer = null;
+                isPlayingTest = false;
+                btn.innerText = "▶️ Sprawdź audio";
+                return;
+            }
+
+            // Get the ID
+            const videoId = getYouTubeId(url);
+            if (!videoId) {
+                alert("Najpierw wklej prawidłowy link do serwisu YouTube.");
+                return;
+            }
+
+            // Start playing
+            btn.innerText = "⏳ Ładowanie...";
+            isPlayingTest = true;
+            document.getElementById('yt-test-container').innerHTML = '<div id="hidden-test-player"></div>';
+
+            testPlayer = new YT.Player('hidden-test-player', {
+                height: '0',
+                width: '0',
+                videoId: videoId,
+                playerVars: { 'autoplay': 1, 'controls': 0, 'start': startSecs, 'playsinline': 1 },
+                events: {
+                    'onReady': (event) => {
+                        event.target.playVideo();
+                        btn.innerText = "⏹️ Zatrzymaj Audio";
+                    },
+                    'onError': (event) => {
+                        let errorMsg = "YouTube zablokował odtwarzanie tego konkretnego filmu w zewnętrznych aplikacjach.";
+                        if (event.data === 101 || event.data === 150) {
+                            errorMsg = "Właściciel wyłączył osadzanie. Proszę użyć innego linku lub wgrać dźwięk z komputera";
+                        }
+                        alert("⚠️ Audio Error: " + errorMsg + "\n\nTen film NIE będzie działał w quizie.");
+
+                        btn.innerText = "▶️ Sprawdź audio";
+                        isPlayingTest = false;
+                        if (testPlayer) testPlayer.destroy();
+                    }
+                }
+            });
         });
     </script>
 </body>

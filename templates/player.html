@@ -90,6 +90,14 @@
                 events: {
                     'onReady': (event) => {
                         event.target.playVideo();
+                    },
+                    'onError': (event) => {
+                        // 101 or 150 means the owner disabled embedding
+                        let errorMsg = "YouTube zablokował odtwarzanie tego konkretnego filmu w zewnętrznych aplikacjach.";
+                        if (event.data === 101 || event.data === 150) {
+                            errorMsg = "Właściciel wyłączył osadzanie. Proszę użyć innego linku lub wgrać dźwięk z komputera.";
+                        }
+                        alert("⚠️ Audio Error: " + errorMsg);
                     }
                 }
             });
