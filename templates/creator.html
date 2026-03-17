@@ -72,21 +72,21 @@
                 </div>
 
                 <hr>
-                <h4>Odpowiedzi</h4>
+                <h4>Odpowiedzi <small>(Zaznacz wszystkie poprawne. Leave C & D blank for a 2-option question)</small></h4>
                 <div class="grid">
-                    <label><input type="radio" name="correct_opt" value="A" required> A jest poprawne
-                        <input type="text" name="opt_a" placeholder="Opcja A" required>
+                    <label><input type="checkbox" name="correct_opt" value="A"> Poprawne
+                        <input type="text" name="opt_a" placeholder="Option A" required>
                     </label>
-                    <label><input type="radio" name="correct_opt" value="B"> B jest poprawne
-                        <input type="text" name="opt_b" placeholder="Opcja B" required>
+                    <label><input type="checkbox" name="correct_opt" value="B"> Poprawne
+                        <input type="text" name="opt_b" placeholder="Option B" required>
                     </label>
                 </div>
                 <div class="grid">
-                    <label><input type="radio" name="correct_opt" value="C"> C jest poprawne
-                        <input type="text" name="opt_c" placeholder="Opcja C" required>
+                    <label><input type="checkbox" name="correct_opt" value="C"> Poprawne
+                        <input type="text" name="opt_c" placeholder="Option C (Optional)">
                     </label>
-                    <label><input type="radio" name="correct_opt" value="D"> D jest poprawne
-                        <input type="text" name="opt_d" placeholder="Opcja D" required>
+                    <label><input type="checkbox" name="correct_opt" value="D"> Poprawne
+                        <input type="text" name="opt_d" placeholder="Option D (Optional)">
                     </label>
                 </div>
 
@@ -104,9 +104,7 @@
                 .then(quizzes => {
                     const select = document.getElementById('quiz-select');
                     select.innerHTML = '';
-                    quizzes.forEach(q => {
-                        select.innerHTML += `<option value="${q.id}">${q.name}</option>`;
-                    });
+                    quizzes.forEach(q => select.innerHTML += `<option value="${q.id}">${q.name}</option>`);
                 });
         }
         loadQuizzes();
@@ -115,7 +113,6 @@
             e.preventDefault();
             const formData = new FormData();
             formData.append('name', document.getElementById('quiz-name').value);
-
             fetch('/api/quizzes', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
@@ -129,6 +126,14 @@
             e.preventDefault();
             const formData = new FormData(this);
             const msgBox = document.getElementById('question-msg');
+
+            // NEW: Validation to ensure at least one checkbox is checked
+            if (formData.getAll('correct_opt').length === 0) {
+                msgBox.style.color = "red";
+                msgBox.innerText = "⚠️ Please check the box next to at least one correct answer.";
+                return;
+            }
+
             msgBox.innerText = "Checking media and saving...";
             msgBox.style.color = "orange";
 
@@ -142,7 +147,6 @@
                         msgBox.style.color = "green";
                         msgBox.innerText = "✅ Question added successfully!";
                         this.reset();
-                        // Stop the test player if it's running
                         if (testPlayer) { testPlayer.destroy(); testPlayer = null; isPlayingTest = false; document.getElementById('test-yt-btn').innerText = "▶️ Test Audio"; }
                         setTimeout(() => msgBox.innerText = "", 4000);
                     }

@@ -129,24 +129,28 @@ def add_question():
 
     youtube_id = ""
     if youtube_url:
-        # NEW: Check if YouTube allows embedding BEFORE saving!
         if not is_youtube_embeddable(youtube_url):
             return jsonify({'status': 'error',
-                            'message': 'The creator of this YouTube video has disabled embedding. Please use a different link (like a fan-made lyric video).'}), 400
+                            'message': 'The creator of this YouTube video has disabled embedding. Please use a different link.'}), 400
 
         match = re.search(r'(?:v=|\/|youtu\.be\/|embed\/)([0-9A-Za-z_-]{11})', youtube_url)
         if match:
             youtube_id = match.group(1)
 
+    # NEW: Handle multiple correct options and join them into a string (e.g., "A,C")
+    correct_opts = request.form.getlist('correct_opt')
+    correct_opts_str = ",".join(correct_opts)
+
     conn = sqlite3.connect('quiz.db')
     c = conn.cursor()
+    # Note: Using data.get('opt_c', '') safely handles missing inputs if they are left blank
     c.execute('''INSERT INTO questions 
                  (quiz_id, question_text, media_type, media_path, audio_path, 
                   opt_a, opt_b, opt_c, opt_d, correct_opt, youtube_id, youtube_start)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
               (data['quiz_id'], data['question_text'], data['media_type'],
                media_path, audio_path, data['opt_a'], data['opt_b'],
-               data['opt_c'], data['opt_d'], data['correct_opt'], youtube_id, int(youtube_start)))
+               data.get('opt_c', ''), data.get('opt_d', ''), correct_opts_str, youtube_id, int(youtube_start)))
     conn.commit()
     conn.close()
     return jsonify({'status': 'success'})

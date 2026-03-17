@@ -141,29 +141,39 @@
             ];
 
             opts.forEach(opt => {
-                const btn = document.createElement('button');
-                btn.innerText = opt.text;
-                btn.id = `btn-${opt.letter}`;
-                btn.onclick = () => checkAnswer(opt.letter, opt.text, q.correct_opt);
-                optionsArea.appendChild(btn);
+                if (opt.text && opt.text.trim() !== "") {
+                    const btn = document.createElement('button');
+                    btn.innerText = opt.text;
+                    btn.id = `btn-${opt.letter}`;
+                    btn.onclick = () => checkAnswer(opt.letter, opt.text, q.correct_opt);
+                    optionsArea.appendChild(btn);
+                }
             });
 
             document.getElementById('next-btn').style.display = 'none';
         }
 
-        function checkAnswer(selectedLetter, selectedText, correctLetter) {
+        function checkAnswer(selectedLetter, selectedText, correctLettersStr) {
+            // Split the saved string into an array (e.g. "A,C" becomes ['A', 'C'])
+            const correctLetters = correctLettersStr.split(',');
+
+            // Disable all existing buttons
             ['A', 'B', 'C', 'D'].forEach(letter => {
-                document.getElementById(`btn-${letter}`).disabled = true;
+                const btn = document.getElementById(`btn-${letter}`);
+                if (btn) btn.disabled = true;
             });
 
             const q = questions[currentIndex];
-            let correctText = "";
-            if (correctLetter === 'A') correctText = q.opt_a;
-            if (correctLetter === 'B') correctText = q.opt_b;
-            if (correctLetter === 'C') correctText = q.opt_c;
-            if (correctLetter === 'D') correctText = q.opt_d;
 
-            const isCorrect = selectedLetter === correctLetter;
+            // Gather all the text for the correct answers for the summary
+            let correctTexts = [];
+            if (correctLetters.includes('A')) correctTexts.push(q.opt_a);
+            if (correctLetters.includes('B')) correctTexts.push(q.opt_b);
+            if (correctLetters.includes('C')) correctTexts.push(q.opt_c);
+            if (correctLetters.includes('D')) correctTexts.push(q.opt_d);
+
+            // Is the selected letter inside the array of correct answers?
+            const isCorrect = correctLetters.includes(selectedLetter);
 
             if (isCorrect) {
                 document.getElementById(`btn-${selectedLetter}`).classList.add('correct');
@@ -171,18 +181,19 @@
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
             } else {
                 document.getElementById(`btn-${selectedLetter}`).classList.add('wrong');
-                document.getElementById(`btn-${correctLetter}`).classList.add('correct');
+                // Highlight ALL the correct answers in green
+                correctLetters.forEach(letter => {
+                    const correctBtn = document.getElementById(`btn-${letter}`);
+                    if (correctBtn) correctBtn.classList.add('correct');
+                });
             }
 
             userAnswers.push({
                 question: q.question_text,
                 userGuess: selectedText,
-                correctAnswer: correctText,
+                correctAnswer: correctTexts.join(' OR '), // Shows "Option 1 OR Option 3" in summary
                 isCorrect: isCorrect
             });
-
-            // Optional: Stop the music when the user guesses
-            // if (ytPlayer) ytPlayer.pauseVideo();
 
             document.getElementById('next-btn').style.display = 'block';
         }
