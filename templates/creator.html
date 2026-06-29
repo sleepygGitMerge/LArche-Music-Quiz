@@ -94,6 +94,29 @@
                 <p id="question-msg" style="color: green;"></p>
             </form>
         </div>
+        <div class="card">
+            <h3>3. Manage Existing Quizzes</h3>
+            <div class="grid">
+                <label>Select Quiz to Manage:
+                    <select id="manage-quiz-select"></select>
+                </label>
+                <button type="button" onclick="loadQuizManager()" class="secondary" style="margin-top: 30px;">Load Quiz Details</button>
+            </div>
+
+            <div id="manage-area" style="display: none; margin-top: 20px; background: rgba(0,0,0,0.02); padding: 15px; border-radius: 5px; border: 1px solid #ddd;">
+                <div class="grid">
+                    <label>Rename Quiz:
+                        <input type="text" id="edit-quiz-name">
+                    </label>
+                    <button type="button" onclick="renameQuiz()" style="margin-top: 30px;">Save Name</button>
+                    <button type="button" onclick="deleteQuiz()" style="margin-top: 30px; background-color: #dc3545; border-color: #dc3545;">⚠️ Delete Entire Quiz</button>
+                </div>
+
+                <hr>
+                <h4>Questions in this Quiz</h4>
+                <div id="manage-questions-list"></div>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -102,9 +125,14 @@
             fetch('/api/quizzes')
                 .then(res => res.json())
                 .then(quizzes => {
-                    const select = document.getElementById('quiz-select');
-                    select.innerHTML = '';
-                    quizzes.forEach(q => select.innerHTML += `<option value="${q.id}">${q.name}</option>`);
+                    const select1 = document.getElementById('quiz-select');
+                    const select2 = document.getElementById('manage-quiz-select');
+                    select1.innerHTML = '';
+                    select2.innerHTML = '';
+                    quizzes.forEach(q => {
+                        select1.innerHTML += `<option value="${q.id}">${q.name}</option>`;
+                        select2.innerHTML += `<option value="${q.id}">${q.name}</option>`;
+                    });
                 });
         }
         loadQuizzes();
@@ -218,6 +246,73 @@
                 }
             });
         });
+        // --- NEW: QUIZ MANAGER LOGIC ---
+        let currentManageQuizId = null;
+
+        function loadQuizManager() {
+            const quizId = document.getElementById('manage-quiz-select').value;
+            if (!quizId) return;
+            currentManageQuizId = quizId;
+
+            // Set the name input
+            const quizName = document.getElementById('manage-quiz-select').options[document.getElementById('manage-quiz-select').selectedIndex].text;
+            document.getElementById('edit-quiz-name').value = quizName;
+
+            // Fetch questions
+            fetch(`/api/admin/quiz/${quizId}`)
+                .then(res => res.json())
+                .then(questions => {
+                    const list = document.getElementById('manage-questions-list');
+                    list.innerHTML = '';
+                    if (questions.length === 0) {
+                        list.innerHTML = "<em>No questions in this quiz yet.</em>";
+                    } else {
+                        questions.forEach((q, index) => {
+                            list.innerHTML += `
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding: 10px 0;">
+                                    <div>
+                                        <strong>Q${index + 1}:</strong> ${q.question_text} <br>
+                                        <small style="color: green;">Correct Answer(s): ${q.correct_opt}</small>
+                                    </div>
+                                    <button type="button" onclick="deleteQuestion(${q.id})" class="outline" style="width: auto; padding: 5px 15px; color: #dc3545; border-color: #dc3545;">Delete</button>
+                                </div>
+                            `;
+                        });
+                    }
+                    document.getElementById('manage-area').style.display = 'block';
+                });
+        }
+
+        function renameQuiz() {
+            const newName = document.getElementById('edit-quiz-name').value;
+            fetch(`/api/admin/quiz/${currentManageQuizId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            }).then(() => {
+                alert("Quiz renamed!");
+                loadQuizzes();
+                setTimeout(() => document.getElementById('manage-quiz-select').value = currentManageQuizId, 500);
+            });
+        }
+
+        function deleteQuiz() {
+            if (confirm("Are you sure? This will delete the quiz and ALL its questions permanently.")) {
+                fetch(`/api/admin/quiz/${currentManageQuizId}`, { method: 'DELETE' })
+                    .then(() => {
+                        alert("Quiz deleted.");
+                        document.getElementById('manage-area').style.display = 'none';
+                        loadQuizzes();
+                    });
+            }
+        }
+
+        function deleteQuestion(qId) {
+            if (confirm("Delete this question?")) {
+                fetch(`/api/questions/${qId}`, { method: 'DELETE' })
+                    .then(() => loadQuizManager()); // Refresh list
+            }
+        }
     </script>
 </body>
 </html>

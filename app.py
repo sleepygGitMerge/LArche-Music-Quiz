@@ -176,5 +176,52 @@ def get_quiz_questions(quiz_id):
     return jsonify(questions[:10])
 
 
+# --- ADMIN MANAGEMENT ROUTES ---
+
+@app.route('/api/admin/quiz/<int:quiz_id>', methods=['GET', 'DELETE', 'PUT'])
+def manage_quiz(quiz_id):
+    conn = sqlite3.connect('quiz.db')
+    c = conn.cursor()
+
+    # Delete entire quiz and its questions
+    if request.method == 'DELETE':
+        c.execute("DELETE FROM questions WHERE quiz_id = ?", (quiz_id,))
+        c.execute("DELETE FROM quizzes WHERE id = ?", (quiz_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'status': 'success'})
+
+    # Rename quiz
+    elif request.method == 'PUT':
+        data = request.get_json()
+        c.execute("UPDATE quizzes SET name = ? WHERE id = ?", (data['name'], quiz_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'status': 'success'})
+
+    # Fetch all questions for management view (not shuffled!)
+    else:
+        c.execute("SELECT * FROM questions WHERE quiz_id = ?", (quiz_id,))
+        rows = c.fetchall()
+        conn.close()
+        questions = []
+        for r in rows:
+            questions.append({
+                'id': r[0],
+                'question_text': r[2],
+                'correct_opt': r[10]
+            })
+        return jsonify(questions)
+
+
+@app.route('/api/questions/<int:q_id>', methods=['DELETE'])
+def delete_question(q_id):
+    conn = sqlite3.connect('quiz.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM questions WHERE id = ?", (q_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'success'})
+
 if __name__ == '__main__':
     app.run(debug=True, host='127.0.0.1', port=5000)
